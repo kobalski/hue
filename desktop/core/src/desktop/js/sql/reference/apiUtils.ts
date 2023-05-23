@@ -153,8 +153,10 @@ export const fetchUdfs = async (
   silenceErrors = true
 ): Promise<UdfDetails[]> => {
   const url = createUrl(database);
+  console.log("fetch udfs");
+  console.log(database);
   const data = createRequestData(connector, FUNCTIONS_OPERATION);
-
+  console.log(data);
   try {
     const response = await post<{ functions?: ApiUdf[] }>(url, data, {
       silenceErrors: silenceErrors
@@ -173,6 +175,8 @@ export const fetchDescribe = async (
   silenceErrors = true
 ): Promise<ApiUdf | undefined> => {
   const url = createUrl(database, udf);
+  console.log("fetch describe");
+  console.log(database);
   const data = createRequestData(connector, FUNCTION_OPERATION);
 
   try {

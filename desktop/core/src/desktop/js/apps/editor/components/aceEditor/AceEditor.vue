@@ -547,7 +547,7 @@
               'Example: CREATE PROCEDURE name AS SELECT * FROM tablename limit 10 GO'
             );
           } else {
-            element.innerText = I18n('Example: SELECT * FROM tablename, or press CTRL + space');
+            element.innerText = I18n('Example: SELECT * FROM tablename, or press CTRL + space for Windows OPT + space for Mac');
           }
           element.style.marginLeft = '6px';
           element.classList.add('ace_invisible');

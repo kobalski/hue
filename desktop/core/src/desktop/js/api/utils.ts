@@ -60,10 +60,11 @@ const axiosInstance = axios.create({ withCredentials: true });
 
 let baseUrl = (window as hueWindow).HUE_BASE_URL;
 let bearerToken: string | undefined;
+let appName: string | undefined;
 
 axiosInstance.interceptors.request.use(config => {
   if (baseUrl) {
-    config.baseURL = baseUrl;
+    config.baseURL = `${baseUrl}/data/v1/apps/${appName}/`;
   }
   if (bearerToken) {
     config.headers['Authorization'] = `Bearer ${bearerToken}`;
@@ -84,6 +85,10 @@ export const setBaseUrl = (newBaseUrl: string): void => {
 
 export const setBearerToken = (newBearerToken: string): void => {
   bearerToken = newBearerToken;
+};
+
+export const setAppName = (newAppName: string): void => {
+  appName = newAppName;
 };
 
 export const successResponseIsError = (responseData?: DefaultApiResponse): boolean => {

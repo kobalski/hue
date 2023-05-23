@@ -24,6 +24,7 @@ import {
   fetchDescribe,
   fetchNavigatorMetadata,
   fetchPartitions,
+  fetchPeakaSchema,
   fetchSample,
   fetchSourceMetadata,
   searchEntities,
@@ -47,6 +48,7 @@ import {
   SqlAnalyzerResponsePopularity,
   TimestampedData
 } from './dataCatalog';
+import { fetchPeakaSourceMetadata } from './api';
 
 export interface BaseDefinition extends TimestampedData {
   name?: string;
@@ -94,6 +96,14 @@ export interface DatabaseSourceMeta extends TimestampedData {
   tables_meta: TablesMeta[];
 }
 
+export interface PeakaDatabaseSourceMeta {
+  id: string;
+  displayName: string;
+  queryName: string;
+  type: string;
+  subType: string;
+}
+
 export interface TableSourceMeta extends TimestampedData {
   columns: string[];
   comment?: string | null;
@@ -136,6 +146,7 @@ export interface FieldSourceMeta extends TimestampedData {
 }
 
 export type SourceMeta = RootSourceMeta | DatabaseSourceMeta | TableSourceMeta | FieldSourceMeta;
+export type PeakaSourceMetaData = PeakaDatabaseSourceMeta;
 export type FieldSample = string | number | null | undefined;
 type ReloadOptions = Omit<CatalogGetOptions, 'cachedOnly' | 'refreshCache'>;
 
@@ -374,7 +385,7 @@ export default class DataCatalogEntry {
       } else {
         await this.save();
       }
-    } catch (err) {}
+    } catch (err) { }
 
     huePubSub.publish('data.catalog.entry.refreshed', {
       entry: this,
@@ -498,14 +509,15 @@ export default class DataCatalogEntry {
       if (this.dataCatalog.invalidatePromise) {
         try {
           await this.dataCatalog.invalidatePromise;
-        } catch (err) {}
+        } catch (err) { }
       }
 
       try {
-        this.sourceMeta = await fetchSourceMetadata({
-          ...options,
-          entry: this
-        });
+        console.log("reloadSourceMeta2");
+        console.log(options);
+        console.log(this);
+        const peakaResponse = await fetchPeakaSourceMetadata({ ...options, entry: this });
+        this.sourceMeta = await this.convertPeakaSourceMetaToSourceMeta(peakaResponse);
         resolve(this.sourceMeta);
       } catch (err) {
         reject(err || 'Fetch failed');
@@ -516,13 +528,32 @@ export default class DataCatalogEntry {
     return applyCancellable(this.sourceMetaPromise, options);
   }
 
+  private async convertPeakaSourceMetaToSourceMeta(peakaSourceMetaData: PeakaDatabaseSourceMeta[]): Promise<SourceMeta> {
+    const databaseList: string[] = []
+    for (const sourceMetaData of peakaSourceMetaData) {
+      try {
+        const schemaResponse = await fetchPeakaSchema({ catalogId: sourceMetaData.id });
+        console.log("convertPeakaSourceMetaToSourceMeta");
+        console.log(schemaResponse);
+        if (schemaResponse.length === 1) {
+          databaseList.push(`${sourceMetaData.queryName}.${schemaResponse[0].schemaName}`);
+        }
+
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    return {
+      "databases": databaseList
+    }
+  }
+
   drop(cascade?: boolean): CancellablePromise<void> {
     if (!this.isDatabase() && !this.isTableOrView()) {
       return CancellablePromise.reject('Drop is only possible for a database, table or view.');
     }
-    const statement = `DROP ${
-      this.isDatabase() ? 'DATABASE' : this.isView() ? 'VIEW' : 'TABLE'
-    } IF EXISTS \`${this.path.join('`.`')}\`${this.isDatabase() && cascade ? ' CASCADE;' : ';'}`;
+    const statement = `DROP ${this.isDatabase() ? 'DATABASE' : this.isView() ? 'VIEW' : 'TABLE'
+      } IF EXISTS \`${this.path.join('`.`')}\`${this.isDatabase() && cascade ? ' CASCADE;' : ';'}`;
 
     return new CancellablePromise<void>((resolve, reject, onCancel) => {
       const executePromise = executeSingleStatement({
@@ -551,7 +582,7 @@ export default class DataCatalogEntry {
     window.clearTimeout(this.saveTimeout);
     try {
       await this.dataCatalog.persistCatalogEntry(this);
-    } catch (err) {}
+    } catch (err) { }
   }
 
   /**
@@ -605,7 +636,7 @@ export default class DataCatalogEntry {
         });
         try {
           sourceMeta = await this.getSourceMeta(options);
-        } catch (err) {}
+        } catch (err) { }
 
         if (cancelled) {
           reject('Cancelled');
@@ -1072,7 +1103,7 @@ export default class DataCatalogEntry {
             resolve(navigatorMeta.description || navigatorMeta.originalDescription || '');
             return;
           }
-        } catch (err) {}
+        } catch (err) { }
       }
 
       if (this.sourceMeta) {
@@ -1720,7 +1751,7 @@ export default class DataCatalogEntry {
               return;
             }
           }
-        } catch (err) {}
+        } catch (err) { }
 
         if (cachedOnly(options)) {
           reject();

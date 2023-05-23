@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export const AUTOCOMPLETE_API_PREFIX = '/api/editor/autocomplete/';
+export const AUTOCOMPLETE_API_PREFIX = '/catalogs';
 export const BANNERS_API = '/api/banners/';
 export const SAMPLE_API_PREFIX = '/notebook/api/sample/';
 export const EXECUTE_API_PREFIX = '/api/editor/execute/'; // Dups with api.ts

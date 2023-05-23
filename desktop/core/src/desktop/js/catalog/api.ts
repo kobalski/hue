@@ -39,6 +39,7 @@ import { hueWindow } from 'types/types';
 import '../utils/json.bigDataParse';
 import sleep from 'utils/timing/sleep';
 import UUID from 'utils/string/UUID';
+import { PeakaDatabaseSourceMeta } from './DataCatalogEntry';
 
 interface AnalyzeResponse {
   status: number;
@@ -51,6 +52,15 @@ interface SharedFetchOptions {
   silenceErrors?: boolean;
 }
 
+interface PeakaFetchParams {
+  catalogId: string;
+}
+
+interface PeakaSchemaResponse {
+    catalogId: string;
+    schemaName: string;
+}
+
 interface DescribeFetchOptions extends SharedFetchOptions {
   refreshAnalysis?: boolean;
 }
@@ -61,7 +71,7 @@ interface SampleFetchOptions extends SharedFetchOptions {
 }
 
 const ADD_TAGS_URL = '/metadata/api/catalog/add_tags';
-const AUTOCOMPLETE_URL_PREFIX = '/api/editor/autocomplete/';
+const AUTOCOMPLETE_URL_PREFIX = '/catalogs';
 const CANCEL_STATEMENT_URL = '/api/editor/cancel_statement';
 const CHECK_STATUS_URL = '/api/editor/check_status';
 const CLOSE_STATEMENT_URL = '/api/editor/close_statement';
@@ -77,6 +87,20 @@ const UPDATE_PROPERTIES_URL = '/metadata/api/catalog/update_properties';
 
 const getEntryUrlPath = (entry: DataCatalogEntry) =>
   entry.path.join('/') + (entry.path.length ? '/' : '');
+
+const getEntryPeakaUrlPath = (entry: DataCatalogEntry) => {
+  if (entry.definition?.type === "source") {
+    return '';
+  }
+
+  if (entry.definition?.type === "database") {
+    return ''
+  }
+
+  if (entry.definition?.type === "table") {
+    return '';
+  }
+}
 
 const performAnalyze = ({
   entry,
@@ -106,8 +130,7 @@ const performAnalyze = ({
     });
     try {
       const analyzeResponse = await post<DefaultApiResponse & { watch_url?: string }>(
-        `/api/${
-          entry.getConnector().id === 'hive' ? 'beeswax' : entry.getConnector().id
+        `/api/${entry.getConnector().id === 'hive' ? 'beeswax' : entry.getConnector().id
         }/analyze/${getEntryUrlPath(entry)}`,
         undefined,
         { silenceErrors }
@@ -144,7 +167,7 @@ export const fetchDescribe = ({
       onCancel(analyzePromise.cancel.bind(analyzePromise));
       try {
         await analyzePromise;
-      } catch (err) {}
+      } catch (err) { }
     }
 
     const [database, table, ...fields] = entry.path;
@@ -377,7 +400,7 @@ const whenAvailable = (options: {
                 resolve(await whenPromise);
                 return;
               }
-            } catch (err) {}
+            } catch (err) { }
           }
           reject(response.query_status);
         } else {
@@ -412,7 +435,7 @@ export const fetchSample = ({
             },
             { silenceErrors: true }
           );
-        } catch (err) {}
+        } catch (err) { }
       }
     };
 
@@ -428,7 +451,7 @@ export const fetchSample = ({
             },
             { silenceErrors: true }
           );
-        } catch (err) {}
+        } catch (err) { }
       }
     };
 
@@ -440,7 +463,7 @@ export const fetchSample = ({
       cancel: async () => {
         try {
           await cancelQuery();
-        } catch (err) {}
+        } catch (err) { }
       }
     });
 
@@ -554,7 +577,7 @@ export const fetchSample = ({
               },
               silenceErrors
             });
-          } catch (err) {}
+          } catch (err) { }
         }
       }
     } catch (err) {
@@ -599,6 +622,66 @@ export const fetchSourceMetadata = ({
       }
     }
   );
+
+export const fetchPeakaSourceMetadata = ({
+  entry,
+  silenceErrors
+}: SharedFetchOptions): CancellablePromise<PeakaDatabaseSourceMeta[]> =>
+  get<PeakaDatabaseSourceMeta[]>(
+    `${AUTOCOMPLETE_URL_PREFIX}`,
+    undefined,
+    {
+      silenceErrors,
+      handleSuccess: (response, resolve, reject) => {
+        const message = <string>response.error || response.message || '';
+        const adjustedResponse = response || {};
+        adjustedResponse.notFound =
+          !!response &&
+          response.status === 0 &&
+          response.code === 500 &&
+          (message.indexOf('Error 10001') !== -1 || message.indexOf('AnalysisException') !== -1);
+
+        adjustedResponse.hueTimestamp = Date.now();
+
+        if (!adjustedResponse.notFound && successResponseIsError(response)) {
+          reject(extractErrorMessage(response));
+        } else {
+          resolve(adjustedResponse);
+        }
+      }
+    }
+  );
+
+export const fetchPeakaSchema = ({
+  catalogId
+}: PeakaFetchParams): CancellablePromise<PeakaSchemaResponse[]> => {
+  return get<PeakaSchemaResponse[]>(
+    `${AUTOCOMPLETE_URL_PREFIX}/${catalogId}/schemas`,
+    undefined,
+    {
+      silenceErrors: true,
+      handleSuccess: (response, resolve, reject) => {
+        const message = <string>response.error || response.message || '';
+        const adjustedResponse = response || {};
+        adjustedResponse.notFound =
+          !!response &&
+          response.status === 0 &&
+          response.code === 500 &&
+          (message.indexOf('Error 10001') !== -1 || message.indexOf('AnalysisException') !== -1);
+
+        adjustedResponse.hueTimestamp = Date.now();
+
+        if (!adjustedResponse.notFound && successResponseIsError(response)) {
+          reject(extractErrorMessage(response));
+        } else {
+          resolve(adjustedResponse);
+        }
+      }
+    }
+  );
+}
+
+
 
 interface SearchOptions {
   limit?: number;

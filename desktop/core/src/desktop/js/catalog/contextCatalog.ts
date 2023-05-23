@@ -16,7 +16,7 @@
 
 import localforage from 'localforage';
 
-import { fetchClusters, fetchComputes, fetchNamespaces } from './api';
+import { fetchClusters, fetchComputes } from './api';
 import { Cluster, Compute, IdentifiableInterpreter, Namespace } from 'config/types';
 import huePubSub from 'utils/huePubSub';
 import { hueWindow } from 'types/types';
@@ -27,6 +27,7 @@ import {
   NamespacesRefreshedEvent,
   REFRESH_CONTEXT_CATALOG_TOPIC
 } from './events';
+import { mockNameSpaceResponse } from 'api/mock/responses';
 
 export interface GetOptions {
   connector: IdentifiableInterpreter;
@@ -145,7 +146,8 @@ export const getNamespaces = async ({
           }
         } catch {}
 
-        const fetchedNamespaces = await fetchNamespaces(connector, silenceErrors);
+        // const fetchedNamespaces = await fetchNamespaces(connector, silenceErrors);
+        const fetchedNamespaces = mockNameSpaceResponse;
         const namespaces = fetchedNamespaces[connector.id];
         if (namespaces) {
           const dynamic = fetchedNamespaces.dynamicClusters;

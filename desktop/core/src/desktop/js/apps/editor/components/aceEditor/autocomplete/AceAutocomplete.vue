@@ -363,6 +363,8 @@
           try {
             this.loading = true;
             const parseResult = await this.autocompleter.autocomplete();
+            console.log("Show Auto Complete");
+            console.log(parseResult);
             if (hueDebug.showParseResult) {
               // eslint-disable-next-line no-restricted-syntax
               console.log(parseResult);
@@ -535,7 +537,10 @@
         }
 
         const selectedSuggestion = this.filtered[this.selectedIndex];
-        const valueToInsert = selectedSuggestion.value;
+        let valueToInsert = selectedSuggestion.value;
+        console.log("insert suggestion");
+        valueToInsert = valueToInsert.replaceAll('"', '');
+        console.log(valueToInsert);
 
         // Not always the case as we also match in comments
         if (valueToInsert.toLowerCase() === this.filter.toLowerCase()) {

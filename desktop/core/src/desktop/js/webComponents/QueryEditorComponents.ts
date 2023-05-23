@@ -24,7 +24,7 @@ import queryEditorLimitInputDefined from './QueryEditorLimitInput';
 import queryEditorResultTableDefined from './QueryEditorResultTable';
 import queryEditorProgressBarDefined from './QueryEditorProgressBar';
 import sqlContextSelectorDefined from './SqlContextSelector';
-import { setBaseUrl, setBearerToken } from 'api/utils';
+import { setBaseUrl, setBearerToken, setAppName } from 'api/utils';
 import Executor, { ExecutorOptions } from 'apps/editor/execution/executor';
 import { getNamespaces } from 'catalog/contextCatalog';
 import dataCatalog from 'catalog/dataCatalog';
@@ -34,11 +34,13 @@ import { Connector } from 'config/types';
 export interface HueComponentConfig {
   baseUrl?: string;
   bearerToken?: string;
+  appName?:string;
 }
 
-const configure = ({ baseUrl, bearerToken }: HueComponentConfig): void => {
+const configure = ({ baseUrl, bearerToken, appName }: HueComponentConfig): void => {
   baseUrl && setBaseUrl(baseUrl);
   bearerToken && setBearerToken(bearerToken);
+  appName && setAppName(appName);
 };
 
 const createExecutor = (options: ExecutorOptions): Executor => new Executor(options);
@@ -70,5 +72,6 @@ export default {
   isQueryEditorComponentsDefined,
   refreshConfig,
   setBaseUrl,
-  setBearerToken
+  setBearerToken,
+  setAppName,
 };

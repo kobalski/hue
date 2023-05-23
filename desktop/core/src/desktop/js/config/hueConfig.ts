@@ -33,6 +33,7 @@ import {
   SchedulerInterpreter
 } from './types';
 import huePubSub from 'utils/huePubSub';
+import { mockConfigResponse } from '../api/mock/responses';
 
 interface InterpreterMap {
   [AppType.browser]: BrowserInterpreter;
@@ -50,7 +51,8 @@ let lastKnownConfig: HueConfig | undefined;
 export const refreshConfig = async (): Promise<HueConfig> => {
   lastConfigPromise = new Promise<HueConfig>(async (resolve, reject) => {
     try {
-      const apiResponse = await post<HueConfig>(URLS.FETCH_CONFIG_API, {}, { silenceErrors: true });
+      // const apiResponse = await post<HueConfig>(URLS.FETCH_CONFIG_API, {}, { silenceErrors: true });
+      const apiResponse = mockConfigResponse;
       if (apiResponse.status == 0) {
         lastKnownConfig = apiResponse;
         resolve(lastKnownConfig);

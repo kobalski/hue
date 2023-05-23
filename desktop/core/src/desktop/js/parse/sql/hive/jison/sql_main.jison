@@ -832,9 +832,8 @@ SchemaQualifiedTableIdentifier
    }
  | RegularOrBacktickedIdentifier '.' RegularOrBacktickedIdentifier
    {
-     parser.addDatabaseLocation(@1, [ { name: $1 } ]);
-     parser.addTableLocation(@3, [ { name: $1 }, { name: $3 } ]);
-     $$ = { identifierChain: [ { name: $1 }, { name: $3 } ] };
+     parser.addDatabaseLocation(@1, [ { name: [$1,$3].join('.') } ]);
+     $$ = { identifierChain: [ { name: [$1,$3].join('.') }] };
    }
  ;
 

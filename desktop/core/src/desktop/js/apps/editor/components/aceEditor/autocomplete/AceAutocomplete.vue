@@ -539,7 +539,7 @@
         const selectedSuggestion = this.filtered[this.selectedIndex];
         let valueToInsert = selectedSuggestion.value;
         console.log("insert suggestion");
-        valueToInsert = valueToInsert.replaceAll('"', '');
+        valueToInsert = valueToInsert.replaceAll('"', '`');
         console.log(valueToInsert);
 
         // Not always the case as we also match in comments

@@ -3509,11 +3509,10 @@ case 2370: case 2401:
      this.$ = { identifierChain: [ { name: $$[$0] } ] };
    
 break;
-case 2371: case 2402:
+case 2371:
 
-     parser.addDatabaseLocation(_$[$0-2], [ { name: $$[$0-2] } ]);
-     parser.addTableLocation(_$[$0], [ { name: $$[$0-2] }, { name: $$[$0] } ]);
-     this.$ = { identifierChain: [ { name: $$[$0-2] }, { name: $$[$0] } ] };
+     parser.addDatabaseLocation(_$[$0-2], [ { name: [$$[$0-2],$$[$0]].join('.') } ]);
+     this.$ = { identifierChain: [ { name: [$$[$0-2],$$[$0]].join('.') }] };
    
 break;
 case 2373: case 2378:
@@ -3532,6 +3531,13 @@ this.$ = [{ name: $$[$0] }];
 break;
 case 2376:
 this.$ = [{ name: $$[$0-2] }, { name: $$[$0-1] }];
+break;
+case 2402:
+
+     parser.addDatabaseLocation(_$[$0-2], [ { name: $$[$0-2] } ]);
+     parser.addTableLocation(_$[$0], [ { name: $$[$0-2] }, { name: $$[$0] } ]);
+     this.$ = { identifierChain: [ { name: $$[$0-2] }, { name: $$[$0] } ] };
+   
 break;
 case 2406:
 this.$ = { identifierChain: $$[$0-1].identifierChain, alias: $$[$0] };

@@ -24,9 +24,11 @@ import {
   fetchDescribe,
   fetchNavigatorMetadata,
   fetchPartitions,
-  fetchPeakaSchema,
+  fetchPeakaCatalogsMeta,
+  fetchPeakaColumnMeta,
+  fetchPeakaSchemaMeta,
+  fetchPeakaTableMeta,
   fetchSample,
-  fetchSourceMetadata,
   searchEntities,
   updateNavigatorProperties,
   updateSourceMetadata
@@ -48,7 +50,7 @@ import {
   SqlAnalyzerResponsePopularity,
   TimestampedData
 } from './dataCatalog';
-import { fetchPeakaSourceMetadata } from './api';
+import { getFromLocalStorage, setInLocalStorage } from 'utils/storageUtils';
 
 export interface BaseDefinition extends TimestampedData {
   name?: string;
@@ -104,6 +106,81 @@ export interface PeakaDatabaseSourceMeta {
   subType: string;
 }
 
+export enum PeakaCatalogMetaType {
+  GENERIC_REST = 'GENERIC_REST',
+  INTERNAL = 'INTERNAL'
+}
+
+export enum PeakaCatalogMetaSubType {
+  internal = 'internal',
+  query = 'query'
+}
+
+export interface PeakaCatalogMeta {
+  id: string;
+  displayName: string;
+  queryName: string;
+  type: PeakaCatalogMetaType;
+  subType: PeakaCatalogMetaSubType;
+}
+
+export interface PeakaCatalogMetaResponse extends TimestampedData {
+  notFound?: boolean;
+  data: PeakaCatalogMeta[]
+}
+
+export interface PeakaSchemaMeta {
+  catalogId: string;
+  schemaName: string;
+}
+
+export interface PeakaSchemaMetaResponse extends TimestampedData {
+  notFound?: boolean;
+  data: PeakaSchemaMeta[]
+}
+
+export interface PeakaTableMeta {
+  catalogId: string;
+  schemaName: string;
+  tableName: string;
+  dynamicTable: boolean;
+}
+
+export interface PeakaTableMetaResponse extends TimestampedData {
+  notFound?: boolean;
+  data: PeakaTableMeta[];
+}
+
+export interface PeakaColumnMeta {
+  catalogId: string;
+  schemaName: string;
+  tableName: string;
+  columnName: string;
+  dataType: string;
+  props: PeakaColumnPropsMeta;
+}
+
+export interface PeakaColumnPropsMeta {
+  id: string;
+  type: string;
+  displayName: string;
+  name: string;
+  isNotNulll: boolean;
+  order: number;
+  pinned: boolean;
+  isUnique: boolean;
+  defaultValue: string;
+  dataType: string;
+  isSystem: boolean;
+  minValue: string;
+  maxValue: string;
+}
+
+export interface PeakaColumnsMetaResponse extends TimestampedData {
+  notFound?: boolean;
+  data: PeakaColumnMeta[]
+}
+
 export interface TableSourceMeta extends TimestampedData {
   columns: string[];
   comment?: string | null;
@@ -146,7 +223,6 @@ export interface FieldSourceMeta extends TimestampedData {
 }
 
 export type SourceMeta = RootSourceMeta | DatabaseSourceMeta | TableSourceMeta | FieldSourceMeta;
-export type PeakaSourceMetaData = PeakaDatabaseSourceMeta;
 export type FieldSample = string | number | null | undefined;
 type ReloadOptions = Omit<CatalogGetOptions, 'cachedOnly' | 'refreshCache'>;
 
@@ -504,6 +580,17 @@ export default class DataCatalogEntry {
     return applyCancellable(this.samplePromise, options);
   }
 
+  private fetchCatalogFromCache(hueDbName: string, peakaSchemaName: string) {
+    const catalogMetaResponse: PeakaCatalogMetaResponse = getFromLocalStorage('peaka.meta.catalogs.response')!;
+    return catalogMetaResponse.data.find((catalog: PeakaCatalogMeta) => {
+      if (catalog.type === PeakaCatalogMetaType.INTERNAL) {
+        return `${catalog.queryName}.${catalog.subType}` === hueDbName;
+      } else {
+        return `${catalog.queryName}.${peakaSchemaName}` === hueDbName;
+      }
+    });
+  }
+
   private reloadSourceMeta(options?: ReloadOptions): CancellablePromise<SourceMeta> {
     this.sourceMetaPromise = new CancellablePromise<SourceMeta>(async (resolve, reject) => {
       if (this.dataCatalog.invalidatePromise) {
@@ -513,32 +600,118 @@ export default class DataCatalogEntry {
       }
 
       try {
-        console.log("reloadSourceMeta2");
+        console.log("reloadSourceMeta");
         console.log(options);
         console.log(this);
-        const peakaResponse = await fetchPeakaSourceMetadata({ ...options, entry: this });
-        this.sourceMeta = await this.convertPeakaSourceMetaToSourceMeta(peakaResponse);
-        resolve(this.sourceMeta);
+        if (this.definition?.type === 'source') {
+          const peakaResponse = await fetchPeakaCatalogsMeta();
+          this.sourceMeta = await this.convertPeakaSourceMetaToSourceMeta(peakaResponse);
+          this.sourceMeta.notFound = peakaResponse.notFound;
+          this.sourceMeta.hueTimestamp = peakaResponse.hueTimestamp;
+          resolve(this.sourceMeta);
+          setInLocalStorage('peaka.meta.catalogs.response', peakaResponse);
+          this.saveLater();
+        } else if (this.definition?.type === 'database') {
+          if (this.name === 'default') {
+            resolve(this.sourceMeta);
+            this.saveLater();
+            return;
+          }
+          const hueDbName = this.definition?.name!;
+          const peakaSchemaName = hueDbName?.split('.')[1];
+          const selectedCatalog = this.fetchCatalogFromCache(hueDbName, peakaSchemaName);
+          const peakaResponse = await fetchPeakaTableMeta({
+            catalogId: selectedCatalog?.id,
+            schemaName: peakaSchemaName,
+            type: selectedCatalog?.type,
+            subType: selectedCatalog?.subType,
+          });
+          const tableList: TablesMeta[] = []
+          let index = 1;
+          peakaResponse.data.forEach((table: PeakaTableMeta) => {
+            tableList.push({ name: table.tableName, type: 'Table', comment: '', index });
+            index++;
+          });
+          const newSourceMeta: DatabaseSourceMeta = {
+            notFound: peakaResponse.notFound,
+            hueTimestamp: peakaResponse.hueTimestamp,
+            tables_meta: tableList
+          }
+          this.sourceMeta = newSourceMeta;
+          resolve(this.sourceMeta);
+          this.saveLater();
+        } else if (this.definition?.type === 'Table') {
+          const hueTableName = this.definition?.name;
+          const hueDbName = this.path[0];
+          const peakaSchemaName = hueDbName?.split('.')[1];
+          const selectedCatalog = this.fetchCatalogFromCache(hueDbName, peakaSchemaName);
+          console.log(selectedCatalog);
+          console.log(hueTableName);
+          console.log(peakaSchemaName);
+          const peakaResponse = await fetchPeakaColumnMeta({
+            catalogId: selectedCatalog?.id,
+            schemaName: peakaSchemaName,
+            type: selectedCatalog?.type,
+            subType: selectedCatalog?.subType,
+            tableName: hueTableName
+          });
+          console.log(peakaResponse);
+          const columnList: string[] = [];
+          const extendedColumnList: ExtendedColumn[] = [];
+          peakaResponse.data.forEach((column: PeakaColumnMeta) => {
+            columnList.push(column.columnName);
+            const extendedColumn: ExtendedColumn = {
+              name: column.columnName,
+              type: column.dataType.toUpperCase(),
+            }
+            extendedColumnList.push(extendedColumn);
+          });
+          const tableSourceMeta: TableSourceMeta = {
+            columns: columnList,
+            extended_columns: extendedColumnList,
+            foreign_keys: [],
+            primary_keys: [],
+            hueTimestamp: peakaResponse.hueTimestamp,
+            notFound: peakaResponse.notFound,
+          }
+          this.sourceMeta = tableSourceMeta;
+          setInLocalStorage(`peaka.meta.table.response.${this.path.join('.')}`, peakaResponse);
+          console.log(tableSourceMeta);
+          resolve(this.sourceMeta);
+          this.saveLater();
+        } else if (this.definition?.hasOwnProperty("primaryKey")) {
+          const tableResponse: PeakaColumnsMetaResponse = getFromLocalStorage(`peaka.meta.table.response.${this.path[0]}.${this.path[1]}`)!;
+          const columnName = this.path[2];
+          const selectedColumn = tableResponse.data.find((column: PeakaColumnMeta) => {
+            return column.columnName == columnName;
+          });
+          const fieldSourceMeta: FieldSourceMeta = {
+            hueTimestamp: tableResponse.hueTimestamp,
+            notFound: tableResponse.notFound,
+            name:selectedColumn?.columnName!,
+            sample: [],
+            type: selectedColumn?.dataType.toUpperCase()!,
+          }
+          this.sourceMeta = fieldSourceMeta;
+          resolve(this.sourceMeta);
+          this.saveLater();
+        }
       } catch (err) {
         reject(err || 'Fetch failed');
         return;
       }
-      this.saveLater();
     });
     return applyCancellable(this.sourceMetaPromise, options);
   }
 
-  private async convertPeakaSourceMetaToSourceMeta(peakaSourceMetaData: PeakaDatabaseSourceMeta[]): Promise<SourceMeta> {
+  private async convertPeakaSourceMetaToSourceMeta(peakaSourceMetaData: PeakaCatalogMetaResponse): Promise<SourceMeta> {
     const databaseList: string[] = []
-    for (const sourceMetaData of peakaSourceMetaData) {
+    for (const sourceMetaData of peakaSourceMetaData.data) {
       try {
-        const schemaResponse = await fetchPeakaSchema({ catalogId: sourceMetaData.id });
-        console.log("convertPeakaSourceMetaToSourceMeta");
-        console.log(schemaResponse);
-        if (schemaResponse.length === 1) {
-          databaseList.push(`${sourceMetaData.queryName}.${schemaResponse[0].schemaName}`);
+        const schemaResponse = await fetchPeakaSchemaMeta({ catalogId: sourceMetaData.id });
+        if (schemaResponse.data.length === 1) {
+          databaseList.push(`${sourceMetaData.queryName}.${schemaResponse.data[0].schemaName}`);
         }
-
       } catch (err) {
         console.error(err);
       }

@@ -29,6 +29,12 @@ import DataCatalogEntry, {
   FieldSample,
   NavigatorMeta,
   Partitions,
+  PeakaCatalogMetaResponse,
+  PeakaCatalogMetaSubType,
+  PeakaCatalogMetaType,
+  PeakaColumnsMetaResponse,
+  PeakaSchemaMetaResponse,
+  PeakaTableMetaResponse,
   Sample,
   SampleMeta,
   SourceMeta
@@ -39,7 +45,6 @@ import { hueWindow } from 'types/types';
 import '../utils/json.bigDataParse';
 import sleep from 'utils/timing/sleep';
 import UUID from 'utils/string/UUID';
-import { PeakaDatabaseSourceMeta } from './DataCatalogEntry';
 
 interface AnalyzeResponse {
   status: number;
@@ -53,12 +58,12 @@ interface SharedFetchOptions {
 }
 
 interface PeakaFetchParams {
-  catalogId: string;
-}
-
-interface PeakaSchemaResponse {
-    catalogId: string;
-    schemaName: string;
+  catalogId?: string;
+  schemaName?: string;
+  type?: PeakaCatalogMetaType;
+  subType?: PeakaCatalogMetaSubType;
+  queryName?: string;
+  tableName?: string;
 }
 
 interface DescribeFetchOptions extends SharedFetchOptions {
@@ -87,20 +92,6 @@ const UPDATE_PROPERTIES_URL = '/metadata/api/catalog/update_properties';
 
 const getEntryUrlPath = (entry: DataCatalogEntry) =>
   entry.path.join('/') + (entry.path.length ? '/' : '');
-
-const getEntryPeakaUrlPath = (entry: DataCatalogEntry) => {
-  if (entry.definition?.type === "source") {
-    return '';
-  }
-
-  if (entry.definition?.type === "database") {
-    return ''
-  }
-
-  if (entry.definition?.type === "table") {
-    return '';
-  }
-}
 
 const performAnalyze = ({
   entry,
@@ -623,51 +614,21 @@ export const fetchSourceMetadata = ({
     }
   );
 
-export const fetchPeakaSourceMetadata = ({
-  entry,
-  silenceErrors
-}: SharedFetchOptions): CancellablePromise<PeakaDatabaseSourceMeta[]> =>
-  get<PeakaDatabaseSourceMeta[]>(
+export const fetchPeakaCatalogsMeta = (): CancellablePromise<PeakaCatalogMetaResponse> => {
+  return get<PeakaCatalogMetaResponse>(
     `${AUTOCOMPLETE_URL_PREFIX}`,
     undefined,
     {
-      silenceErrors,
-      handleSuccess: (response, resolve, reject) => {
-        const message = <string>response.error || response.message || '';
-        const adjustedResponse = response || {};
-        adjustedResponse.notFound =
-          !!response &&
-          response.status === 0 &&
-          response.code === 500 &&
-          (message.indexOf('Error 10001') !== -1 || message.indexOf('AnalysisException') !== -1);
-
-        adjustedResponse.hueTimestamp = Date.now();
-
-        if (!adjustedResponse.notFound && successResponseIsError(response)) {
-          reject(extractErrorMessage(response));
-        } else {
-          resolve(adjustedResponse);
-        }
-      }
-    }
-  );
-
-export const fetchPeakaSchema = ({
-  catalogId
-}: PeakaFetchParams): CancellablePromise<PeakaSchemaResponse[]> => {
-  return get<PeakaSchemaResponse[]>(
-    `${AUTOCOMPLETE_URL_PREFIX}/${catalogId}/schemas`,
-    undefined,
-    {
       silenceErrors: true,
-      handleSuccess: (response, resolve, reject) => {
-        const message = <string>response.error || response.message || '';
-        const adjustedResponse = response || {};
+      handleSuccess: (response: any, resolve, reject) => {
+        const adjustedResponse: PeakaCatalogMetaResponse =  {
+          data: response
+        };
         adjustedResponse.notFound =
           !!response &&
           response.status === 0 &&
-          response.code === 500 &&
-          (message.indexOf('Error 10001') !== -1 || message.indexOf('AnalysisException') !== -1);
+          response.code === 500 ||
+          response.code === 401;
 
         adjustedResponse.hueTimestamp = Date.now();
 
@@ -681,7 +642,120 @@ export const fetchPeakaSchema = ({
   );
 }
 
+export const fetchPeakaSchemaMeta = ({
+  catalogId
+}: PeakaFetchParams): CancellablePromise<PeakaSchemaMetaResponse> => {
+  return get<PeakaSchemaMetaResponse>(
+    `${AUTOCOMPLETE_URL_PREFIX}/${catalogId}/schemas`,
+    undefined,
+    {
+      silenceErrors: true,
+      handleSuccess: (response: any, resolve, reject) => {
+        const adjustedResponse: PeakaSchemaMetaResponse =  {
+          data: response
+        };
+        adjustedResponse.notFound =
+          !!response &&
+          response.status === 0 &&
+          response.code === 500 ||
+          response.code === 401;
 
+        adjustedResponse.hueTimestamp = Date.now();
+
+        if (!adjustedResponse.notFound && successResponseIsError(response)) {
+          reject(extractErrorMessage(response));
+        } else {
+          resolve(adjustedResponse);
+        }
+      }
+    }
+  );
+}
+
+export const fetchPeakaTableMeta = ({
+  catalogId,
+  schemaName,
+  type,
+  subType,
+}: PeakaFetchParams): CancellablePromise<PeakaTableMetaResponse> => {
+
+  let url = `${AUTOCOMPLETE_URL_PREFIX}/${catalogId}`;
+  if (type === PeakaCatalogMetaType.INTERNAL) {
+    url = url + `/schemas/${subType}/tables`
+  }
+  if (type === PeakaCatalogMetaType.GENERIC_REST) {
+    url = url + `/schemas/${schemaName}/tables`
+  }
+  
+  return get<PeakaTableMetaResponse>(
+    url,
+    undefined,
+    {
+      silenceErrors: true,
+      handleSuccess: (response: any, resolve, reject) => {
+        const adjustedResponse: PeakaTableMetaResponse = {
+          data: response
+        };
+        adjustedResponse.notFound =
+          !!response &&
+          response.status === 0 &&
+          response.code === 500 ||
+          response.code === 401;
+
+        adjustedResponse.hueTimestamp = Date.now();
+
+        if (!adjustedResponse.notFound && successResponseIsError(response)) {
+          reject(extractErrorMessage(response));
+        } else {
+          resolve(adjustedResponse);
+        }
+      }
+    }
+  );
+}
+
+export const fetchPeakaColumnMeta = ({
+  catalogId,
+  schemaName,
+  type,
+  subType,
+  tableName,
+}: PeakaFetchParams): CancellablePromise<PeakaColumnsMetaResponse> => {
+
+  let url = `${AUTOCOMPLETE_URL_PREFIX}/${catalogId}`;
+  if (type === PeakaCatalogMetaType.INTERNAL) {
+    url = url + `/schemas/${subType}/tables/${tableName}/columns`
+  }
+  if (type === PeakaCatalogMetaType.GENERIC_REST) {
+    url = url + `/schemas/${schemaName}/tables/${tableName}/columns`
+  }
+
+  return get<PeakaColumnsMetaResponse>(
+    url,
+    undefined,
+    {
+      silenceErrors: true,
+      handleSuccess: (response: any, resolve, reject) => {
+        const adjustedResponse: PeakaColumnsMetaResponse =  {
+          data: response
+        };
+        adjustedResponse.notFound =
+          !!response &&
+          response.status === 0 &&
+          response.code === 500 ||
+          response.code  === 401;
+
+        adjustedResponse.hueTimestamp = Date.now();
+
+        if (!adjustedResponse.notFound && successResponseIsError(response)) {
+          reject(extractErrorMessage(response));
+        } else {
+          resolve(adjustedResponse);
+        }
+      }
+    }
+  );
+}
 
 interface SearchOptions {
   limit?: number;

@@ -152,19 +152,17 @@ export const fetchUdfs = async (
   database?: string,
   silenceErrors = true
 ): Promise<UdfDetails[]> => {
-  const url = createUrl(database);
-  console.log("fetch udfs");
-  console.log(database);
-  const data = createRequestData(connector, FUNCTIONS_OPERATION);
-  console.log(data);
-  try {
-    const response = await post<{ functions?: ApiUdf[] }>(url, data, {
-      silenceErrors: silenceErrors
-    });
-    if (response?.functions) {
-      return adaptApiFunctions(response.functions);
-    }
-  } catch (err) {}
+  // UDFS are disabled
+  // const url = createUrl(database);
+  // const data = createRequestData(connector, FUNCTIONS_OPERATION);
+  // try {
+  //   const response = await post<{ functions?: ApiUdf[] }>(url, data, {
+  //     silenceErrors: silenceErrors
+  //   });
+  //   if (response?.functions) {
+  //     return adaptApiFunctions(response.functions);
+  //   }
+  // } catch (err) {}
   return [];
 };
 
